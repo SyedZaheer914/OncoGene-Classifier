@@ -39,4 +39,4 @@ This project leverages Random Forests and feature selection to identify the most
 ## 🖥️ Usage
 1. Run the application:
    ```bash
-   python app.py
+   python LungCancerPredictionViaGeneExpression.py
