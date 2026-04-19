@@ -39,8 +39,8 @@ The pipeline utilizes feature selection to rank the most statistically significa
 * **`smoking status.csv`**: Clinical metadata for correlation analysis.
 * **`requirements.txt`**: List of required Python libraries.
 
-🔬 Technical Methodology
-Data Preparation: Expression matrices are normalized using StandardScaler.
-Feature Selection: High-variance features are filtered to optimize model performance.
-Training: The model is trained using StratifiedKFold to ensure balanced learning across classes.
-Evaluation: Performance is measured via Accuracy Scores, ROC/AUC, and Classification Reports.
+## 🔬 Technical Methodology
+* **Data Preparation:** Expression matrices are normalized using StandardScaler.
+* **Feature Selection:** High-variance features are filtered to optimize model performance.
+* **Training:** The model is trained using StratifiedKFold to ensure balanced learning across classes.
+* **Evaluation:** Performance is measured via Accuracy Scores, ROC/AUC, and Classification Reports.
