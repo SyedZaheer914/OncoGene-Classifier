@@ -1,42 +1,54 @@
-# OncoGene Classifier
+# OncoGene Classifier: Lung Cancer Prediction via Gene Expression
 
-A machine learning application for classifying lung cancer samples using gene expression data.  
-This project leverages Random Forests and feature selection to identify the most informative genes, enabling accurate cancer vs. normal classification and gene ranking.
+![App Interface](./AppInterface.png)
 
----
+## 📋 Overview
+OncoGene Classifier is a machine learning pipeline designed to distinguish between lung cancer samples and normal tissue using high-dimensional gene expression data. By integrating feature selection with a Random Forest architecture, the tool identifies key biomarkers (genes) that drive the classification, providing both diagnostic predictions and biological insights.
 
-## 🚀 Features
-- Upload **expression matrix** (genes × samples).
-- Upload **labels file** (SampleID → Cancer/Normal).
-- Optional: Upload **smoking status file** for correlation analysis.
-- Automatic detection of file orientation (samples in rows vs. columns).
-- Preprocessing with scaling and feature selection (ANOVA F-test).
-- Random Forest classification with cross-validation.
-- Outputs:
-  - Confusion matrix (`confusion_matrix.png`)
-  - ROC curve (`roc_curve.png`)
-  - Prediction probabilities (`prediction_probabilities.png`)
-  - Classification report
-  - Ranked list of top cancer-associated genes (`top_cancer_genes.png`)
-  - Predictions per sample (`cancer_predictions.csv`)
+## 📊 Results & Visualization
 
----
+### Model Performance
+The classifier's reliability is validated through several metrics. The ROC curve indicates strong sensitivity and specificity, while the confusion matrix reveals the model's precision in identifying true positives (Cancer) vs. true negatives (Normal).
 
-## 📂 Input Files
-1. **Expression Matrix**  
-   - CSV/TSV file with genes as rows and samples as columns.  
-   - Example shape: `(22000, 107)`.
+| Classification Metrics | Prediction Confidence |
+|:---:|:---:|
+| ![Confusion Matrix](./confusion_matrix.png) | ![ROC Curve](./roc_curve.png) |
+| *Figure 1: Confusion Matrix* | *Figure 2: ROC Curve (AUC Analysis)* |
 
-2. **Labels File**  
-   - CSV file with two columns: `SampleID, Label`.  
-   - Labels must be `Cancer` or `Normal`.
+### Biomarker Identification
+Using **ANOVA F-test feature selection**, the pipeline narrows down thousands of genes to the most statistically significant contributors. 
 
-3. **Smoking Status File** *(optional)*  
-   - CSV file with `SampleID` and smoking-related columns.
+![Top Cancer Genes](./top_cancer_genes.png)
+*Figure 3: Top 20 Genes ranked by importance in the classification model.*
+
+### Clinical Context
+The project also explores the correlation between gene expression profiles and **Smoking Status**, visualizing how environmental factors align with the molecular data.
+
+![Smoking Data Analysis](./SmokingDataAnalysis.png)
+*Figure 4: Correlation analysis of smoking status vs. genomic expression.*
 
 ---
 
-## 🖥️ Usage
-1. Run the application:
+## 🚀 Key Features
+* **Intelligent Preprocessing:** Automatic detection of file orientation (Samples as rows or columns) and standard scaling.
+* **Feature Selection:** Reduces noise by selecting the most informative genes, preventing overfitting.
+* **Interactive UI:** A user-friendly interface for data upload and real-time visualization generation.
+* **Comprehensive Exports:** Generates `cancer_predictions.csv` containing final classification results and probability scores.
+
+## 📂 Project Structure
+* `LungCancerPredictionViaGeneExpression.py`: Main application script.
+* `cancer_predictions.csv`: Final output predictions per sample.
+* `RandomForestPredictions.png`: Overview of model output across the dataset.
+* `top_cancer_genes.png`: Horizontal bar chart of prioritized biomarkers.
+
+## 🛠️ Technical Stack & Installation
+This project is built using:
+* **Python 3.x**
+* **Scikit-Learn:** Random Forest Classifier & Feature Selection.
+* **Pandas/NumPy:** Data manipulation and matrix normalization.
+* **Matplotlib/Seaborn:** Advanced genomic data visualization.
+
+### Installation
+1. Clone the repository:
    ```bash
-   python LungCancerPredictionViaGeneExpression.py
+   git clone [https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git](https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git)
