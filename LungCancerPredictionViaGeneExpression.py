@@ -7,6 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
 from sklearn.metrics import classification_report, roc_curve, auc, confusion_matrix, accuracy_score
+from sklearn.feature_selection import SelectKBest, f_classif
 import numpy as np
 import os
 
@@ -47,7 +48,6 @@ class GeneExpressionApp:
         self.labels_df = None
         self.smoking_df = None
 
-
     def log(self, message):
         self.output_text.insert(tk.END, message + "\n")
         self.output_text.see(tk.END)
@@ -63,7 +63,7 @@ class GeneExpressionApp:
                     df = pd.read_csv(file_path, sep=',', index_col=0, engine='python', quotechar='"')
 
                 if df is not None:
-                    self.log("" + f"\n[DEBUG] Raw shape: {df.shape}")
+                    self.log(f"\n[DEBUG] Raw shape: {df.shape}")
                     if all(str(idx).startswith("GSM") for idx in df.index[:5]):
                         self.log("\n[INFO] Detected GSM IDs in rows. Transposing to match expected format...")
                         df = df.transpose()
@@ -138,28 +138,45 @@ class GeneExpressionApp:
                 self.log("\n[ERROR] Not enough classes to perform classification.")
                 return
 
-            from sklearn.feature_selection import VarianceThreshold, SelectKBest, f_classif
+            # ============================================================
+            # 🛡️ THE ANTI-LEAKAGE PATCH (FIXED WORKFLOW)
+            # ============================================================
+            # STEP 1: Split into Train and Test subsets FIRST to secure isolation
+            X_train_raw, X_test_raw, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
+            self.log(f"\nSplit complete. Train set: {len(X_train_raw)} cases | Test set: {len(X_test_raw)} cases.")
+
+            # STEP 2: Initialize Transformers
             scaler = StandardScaler()
-            X_scaled = scaler.fit_transform(X)
-            sel = SelectKBest(f_classif, k=100)
-            X_selected = sel.fit_transform(X_scaled, y)
-            self.log(f"\n[INFO] Selected {X_selected.shape[1]} high-variance features from {X.shape[1]} total genes.")
+            selector = SelectKBest(f_classif, k=100)
 
-            X_train, X_test, y_train, y_test = train_test_split(X_selected, y, test_size=0.3, random_state=42, stratify=y)
+            # STEP 3: Fit and transform ONLY on the training partition
+            X_train_scaled = scaler.fit_transform(X_train_raw)
+            X_train_selected = selector.fit_transform(X_train_scaled, y_train)
+            
+            # STEP 4: Blindly transform the test partition using training metrics
+            X_test_scaled = scaler.transform(X_test_raw)
+            X_test_selected = selector.transform(X_test_scaled)
+            
+            self.log(f"[INFO] Robust Feature Engineering Complete. Selected top {X_train_selected.shape[1]} genes strictly from training space.")
+            # ============================================================
 
-            min_class_size = y.value_counts().min()
+            # Stratified Cross-Validation on training data only to prevent data-snooping
+            min_class_size = y_train.value_counts().min()
             n_splits = min(5, min_class_size)
-            if n_splits < 2:
-                self.log(f"\n[ERROR] Not enough samples to perform cross-validation. At least 2 samples per class needed.")
-                return
+            if n_splits >= 2:
+                cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+                scores = cross_val_score(RandomForestClassifier(n_estimators=100, random_state=42), X_train_selected, y_train, cv=cv)
+                self.log(f"[INFO] 5-Fold Training Cross-Validation Accuracy: {scores.mean()*100:.2f}% (+/- {scores.std()*2*100:.2f}%)")
+            else:
+                self.log("\n[WARNING] Skinned Cross-Validation: Insufficient samples in training split minor class.")
 
-            cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
-            scores = cross_val_score(RandomForestClassifier(n_estimators=100, random_state=42), X_selected, y, cv=cv)
-
+            # Train Final Classifier on independent training space
             clf = RandomForestClassifier(n_estimators=100, random_state=42)
-            clf.fit(X_train, y_train)
-            y_pred = clf.predict(X_test)
-            y_proba = clf.predict_proba(X_test)[:, 1] if clf.n_classes_ > 1 else None
+            clf.fit(X_train_selected, y_train)
+            
+            # Validate on unseen test features
+            y_pred = clf.predict(X_test_selected)
+            y_proba = clf.predict_proba(X_test_selected)[:, 1] if clf.n_classes_ > 1 else None
 
             merged_test = pd.DataFrame({
                 'SampleID': y_test.reset_index(drop=True).index,
@@ -171,22 +188,19 @@ class GeneExpressionApp:
 
             cm = confusion_matrix(y_test, y_pred)
             self.log("\n[INFO] Confusion Matrix:\n\n" + str(cm))
-            # Create labeled DataFrame for the confusion matrix
+            
             cm_df = pd.DataFrame(cm, index=["Actual Normal", "Actual Cancer"],
                           columns=["Predicted Normal", "Predicted Cancer"])
 
-            # Plot it as a heatmap
             plt.figure(figsize=(6, 5))
-            sns.heatmap(cm_df, annot=True, fmt='d', cmap='Blues', cbar=False,
-                        linewidths=0.5, linecolor='black')
+            sns.heatmap(cm_df, annot=True, fmt='d', cmap='Blues', cbar=False, linewidths=0.5, linecolor='black')
             plt.title("Confusion Matrix")
             plt.xlabel("Predicted Label")
             plt.ylabel("True Label")
             plt.tight_layout()
             plt.savefig("confusion_matrix.png")
             plt.close()
-
-            self.log("\n[INFO] Saved confusion_matrix.png")
+            self.log("[INFO] Saved confusion_matrix.png")
 
             if y_proba is not None:
                 fpr, tpr, _ = roc_curve(y_test, y_proba)
@@ -201,7 +215,7 @@ class GeneExpressionApp:
                 plt.tight_layout()
                 plt.savefig("roc_curve.png")
                 plt.close()
-                self.log("\n[INFO] Saved roc_curve.png")
+                self.log("[INFO] Saved roc_curve.png")
 
                 plt.figure(figsize=(8, 4))
                 plt.hist(y_proba, bins=20, color='skyblue', edgecolor='black')
@@ -211,14 +225,13 @@ class GeneExpressionApp:
                 plt.tight_layout()
                 plt.savefig("prediction_probabilities.png")
                 plt.close()
-                self.log("\n[INFO] Saved prediction_probabilities.png")
-            else:
-                self.log("\n[WARNING] ROC curve skipped: only one class present.")
+                self.log("[INFO] Saved prediction_probabilities.png")
 
             report = classification_report(y_test, y_pred, zero_division=0)
             self.log("\n[INFO] Cancer Classification Report:\n\n" + report)
 
-            selected_gene_names = X.columns[sel.get_support(indices=True)] if hasattr(X, 'columns') else [f"Gene_{i}" for i in range(X_selected.shape[1])]
+            # Map important features back to original gene identifiers safely
+            selected_gene_names = X.columns[selector.get_support(indices=True)] if hasattr(X, 'columns') else [f"Gene_{i}" for i in range(X_train_selected.shape[1])]
             feature_importance = pd.Series(clf.feature_importances_, index=selected_gene_names)
             top_genes = feature_importance.sort_values(ascending=False).head(20)
             self.log("\n[INFO] Top 20 Genes by Importance:\n\n" + str(top_genes))
@@ -241,18 +254,17 @@ class GeneExpressionApp:
         if self.smoking_df is not None:
             smoking_col = self.find_smoking_column(self.smoking_df)
             if smoking_col:
-                merged = pd.merge(merged, self.smoking_df, on='SampleID', how='left')
-                cancer_cases = merged[merged['Label'] == 'Cancer']
+                merged_smoke = pd.merge(merged, self.smoking_df, on='SampleID', how='left')
+                cancer_cases = merged_smoke[merged_smoke['Label'] == 'Cancer']
                 smoker_counts = cancer_cases[smoking_col].value_counts()
                 self.log("\n[INFO] Smoking status distribution among Cancer patients:\n")
                 self.log(str(smoker_counts))
 
-                # Add percent breakdown
                 total_cancer_cases = cancer_cases.shape[0]
-                smoker_percentages = (smoker_counts / total_cancer_cases) * 100
-                self.log("\n[INFO] Smoking status percentage among Cancer patients:\n")
-                self.log(str(smoker_percentages.round(2)))
-
+                if total_cancer_cases > 0:
+                    smoker_percentages = (smoker_counts / total_cancer_cases) * 100
+                    self.log("\n[INFO] Smoking status percentage among Cancer patients:\n")
+                    self.log(str(smoker_percentages.round(2)))
             else:
                 self.log("\n[WARNING] Could not find a column related to smoking status in the uploaded data.")
         else:
@@ -262,4 +274,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = GeneExpressionApp(root)
     root.mainloop()
-
